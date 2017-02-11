@@ -1,7 +1,10 @@
 package mapreduce
 
 import (
+	"encoding/json"
 	"hash/fnv"
+	"io/ioutil"
+	"os"
 )
 
 // doMap manages one map task: it reads one of the input files
@@ -53,6 +56,51 @@ func doMap(
 	//
 	// Remember to close the file after you have written all the values!
 	//
+
+	// read the input file
+	fcontent, _ := ioutil.ReadFile(inFile)
+	contentString := string(fcontent)
+	// call user application
+	kvPairList := mapF(inFile, contentString)
+	// save the result in a map, where @key is string,
+	// @value is a list of string
+	tmpMap := make(map[string][]string)
+	for _, kv := range kvPairList {
+		tmpMap[kv.Key] = append(tmpMap[kv.Key], kv.Value)
+	}
+	// aggregate the results according to the key
+	// map[reduceFileName](map[key][]value)
+	mapping := make(map[string](map[string][]string))
+	for k, v := range tmpMap {
+		r := ihash(k) % nReduce
+		reducerName := reduceName(jobName, mapTaskNumber, r)
+		if mapping[reducerName] == nil {
+			mapping[reducerName] = make(map[string][]string)
+		}
+		mapping[reducerName][k] = v
+	}
+	// write content to file
+	for k, v := range mapping {
+		f := openFileRW(k)
+		vB, _ := json.Marshal(v)
+		_, err := f.Write(vB)
+		if err != nil {
+			panic(err)
+		}
+		f.Close()
+	}
+}
+
+func openFileRW(fileName string) *os.File {
+	f, err := os.OpenFile(fileName, os.O_APPEND|os.O_RDWR, os.ModeAppend)
+	if err != nil {
+		if os.IsNotExist(err) {
+			f, err = os.Create(fileName)
+		} else {
+			panic(err)
+		}
+	}
+	return f
 }
 
 func ihash(s string) int {
