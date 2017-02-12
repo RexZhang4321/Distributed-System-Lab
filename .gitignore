@@ -2,3 +2,6 @@ pkg/
 api.key
 *-handin.tar.gz
 .DS_Store
+src/playground/test.go
+src/playground/tmp
+

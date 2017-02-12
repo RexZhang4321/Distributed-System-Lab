@@ -3,7 +3,7 @@ package mapreduce
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 )
 
@@ -54,22 +54,26 @@ func doReduce(
 	fmt.Println("Output file is: ", outFile)
 	defer f.Close()
 	enc := json.NewEncoder(f)
+	reduceKVs := make(map[string][]string)
 	for i := 0; i < nMap; i++ {
 		mapTmpFileName := reduceName(jobName, i, reduceTaskNumber)
-		fcontent, err := ioutil.ReadFile(mapTmpFileName)
+		fp, err := os.Open(mapTmpFileName)
 		if err != nil {
 			panic(err)
 		}
-		reduceKVs := make(map[string][]string)
-		json.Unmarshal(fcontent, &reduceKVs)
-		var keys []string
-		for k := range reduceKVs {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			enc.Encode(KeyValue{key, reduceF(key, reduceKVs[key])})
+		dec := json.NewDecoder(fp)
+		reduceTmpKVs := make(map[string][]string)
+		dec.Decode(&reduceTmpKVs)
+		for k, v := range reduceTmpKVs {
+			reduceKVs[k] = append(reduceKVs[k], v...)
 		}
 	}
-
+	var keys []string
+	for k := range reduceKVs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		enc.Encode(KeyValue{key, reduceF(key, reduceKVs[key])})
+	}
 }

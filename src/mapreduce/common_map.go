@@ -82,11 +82,8 @@ func doMap(
 	// write content to file
 	for k, v := range mapping {
 		f := openFileRW(k)
-		vB, _ := json.Marshal(v)
-		_, err := f.Write(vB)
-		if err != nil {
-			panic(err)
-		}
+		enc := json.NewEncoder(f)
+		enc.Encode(v)
 		f.Close()
 	}
 }
