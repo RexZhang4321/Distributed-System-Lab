@@ -40,12 +40,18 @@ func schedule(jobName string, mapFiles []string, nReduce int, phase jobPhase, re
 		mf := mapFiles[idx]
 		worker := <-registerChan
 		wg.Add(1)
-		go func(worker string, jobName string, mf string, idx int, phase jobPhase, ntasks int, n_other int, wg *sync.WaitGroup) {
-			doTaskArgs := DoTaskArgs{jobName, mf, phase, idx, n_other}
-			call(worker, "Worker.DoTask", doTaskArgs, new(struct{}))
+		doTaskArgs := DoTaskArgs{jobName, mf, phase, idx, n_other}
+		go func(wk string, doTaskArgs *DoTaskArgs, wg *sync.WaitGroup) {
+			workerStat := call(worker, "Worker.DoTask", doTaskArgs, new(struct{}))
+			for workerStat == false {
+				fmt.Println(worker, workerStat)
+				worker = <-registerChan
+				fmt.Println("Switching to...", worker)
+				workerStat = call(worker, "Worker.DoTask", doTaskArgs, new(struct{}))
+			}
 			wg.Done()
 			registerChan <- worker
-		}(worker, jobName, mf, idx, phase, ntasks, n_other, &wg)
+		}(worker, &doTaskArgs, &wg)
 	}
 	wg.Wait()
 	fmt.Printf("Schedule: %v phase done\n", phase)
